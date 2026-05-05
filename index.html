@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ThreatScan — Message Vulnerability Detector</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --green: #1aff7a;
+      --bg: #080c0a;
+      --surface: #0d120e;
+      --surface2: #0a0f0b;
+      --text: #c8ffd8;
+      --muted: rgba(26,255,122,0.4);
+      --border: rgba(26,255,122,0.15);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .ts-header {
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .ts-logo-box {
+      width: 38px; height: 38px;
+      border: 2px solid var(--green);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .ts-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      color: #fff;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+    .ts-subtitle {
+      font-size: 10px;
+      color: rgba(26,255,122,0.5);
+      letter-spacing: 0.14em;
+    }
+    .ts-status {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .ts-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    .ts-status-label { font-size: 10px; color: rgba(26,255,122,0.5); letter-spacing: 0.12em; }
+
+    /* ── Main container ── */
+    .ts-main { max-width: 860px; margin: 0 auto; padding: 32px 20px; }
+
+    /* ── Panel / Card ── */
+    .ts-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .ts-panel-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 8px;
+    }
+    .ts-label {
+      font-size: 10px;
+      color: rgba(26,255,122,0.45);
+      letter-spacing: 0.12em;
+    }
+
+    /* ── Example buttons ── */
+    .ts-example-btn {
+      padding: 3px 10px;
+      background: transparent;
+      border: 1px solid rgba(26,255,122,0.2);
+      border-radius: 4px;
+      color: rgba(26,255,122,0.55);
+      font-size: 10px;
+      font-family: 'Space Mono', monospace;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ts-example-btn:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    /* ── Textarea ── */
+    .ts-textarea {
+      width: 100%;
+      min-height: 140px;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 20px;
+      resize: vertical;
+    }
+    .ts-textarea:focus { outline: none; }
+    .ts-textarea::placeholder { color: rgba(200,255,216,0.25); }
+
+    .ts-panel-footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .ts-char-count { font-size: 10px; color: rgba(26,255,122,0.3); }
+
+    /* ── Analyze button ── */
+    .ts-btn {
+      padding: 10px 28px;
+      background: var(--green);
+      border: 1px solid var(--green);
+      border-radius: 6px;
+      color: var(--bg);
+      font-family: 'Space Mono', monospace;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      transition: all 0.15s;
+    }
+    .ts-btn:hover:not(:disabled) { opacity: 0.88; }
+    .ts-btn:disabled {
+      background: transparent;
+      border-color: rgba(26,255,122,0.25);
+      color: rgba(26,255,122,0.3);
+      cursor: not-allowed;
+    }
+    .ts-btn.scanning {
+      background: transparent;
+      border-color: rgba(26,255,122,0.35);
+      color: rgba(26,255,122,0.35);
+      animation: blink 1s infinite;
+    }
+
+    /* ── Scan line ── */
+    .ts-scanline-wrap { position: relative; }
+    .ts-scanline {
+      position: absolute;
+      left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, #00ff88, transparent);
+      animation: scan 1.4s linear infinite;
+      top: 0; z-index: 5;
+      display: none;
+    }
+    .ts-scanline.active { display: block; }
+
+    /* ── Result panel ── */
+    .ts-result {
+      border-radius: 12px;
+      overflow: hidden;
+      animation: fadeIn 0.4s ease;
+      display: none;
+    }
+    .ts-result.visible { display: block; }
+
+    .ts-result-header {
+      padding: 20px 24px;
+      display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    }
+    .ts-score-num {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 48px;
+      line-height: 1;
+    }
+    .ts-score-label { font-size: 9px; letter-spacing: 0.15em; opacity: 0.6; }
+    .ts-risk-name {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: 0.05em;
+    }
+    .ts-summary { font-size: 13px; color: rgba(200,255,216,0.8); margin-top: 4px; line-height: 1.5; }
+    .ts-badge-pill {
+      padding: 8px 18px;
+      border: 2px solid;
+      border-radius: 8px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      margin-left: auto;
+    }
+
+    .ts-section {
+      padding: 16px 24px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    /* ── Threat tag ── */
+    .ts-threat-tag {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 4px;
+      border: 1px solid;
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      margin: 0 5px 6px 0;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Red flag row ── */
+    .ts-flag { display: flex; gap: 10px; margin-bottom: 6px; font-size: 12px; line-height: 1.5; color: rgba(200,255,216,0.75); }
+    .ts-flag-arrow { flex-shrink: 0; }
+
+    /* ── Explanation ── */
+    .ts-explanation { font-size: 12px; color: rgba(200,255,216,0.75); line-height: 1.7; }
+
+    /* ── Advice ── */
+    .ts-advice { font-size: 13px; font-weight: 700; line-height: 1.6; }
+
+    /* ── Error ── */
+    .ts-error {
+      background: #1a0a0a;
+      border: 1px solid rgba(255,51,51,0.3);
+      border-radius: 8px;
+      padding: 14px 20px;
+      color: #ff6666;
+      font-size: 12px;
+      display: none;
+    }
+    .ts-error.visible { display: block; }
+
+    /* ── History ── */
+    .ts-history { display: none; }
+    .ts-history.visible { display: block; }
+    .ts-history-row {
+      padding: 10px 20px;
+      border-bottom: 1px solid rgba(26,255,122,0.05);
+      display: flex; align-items: center; gap: 12px; font-size: 11px;
+    }
+    .ts-history-row:last-child { border-bottom: none; }
+    .ts-history-risk { width: 80px; flex-shrink: 0; font-weight: 700; }
+    .ts-history-msg { flex: 1; color: rgba(200,255,216,0.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ts-history-time { color: rgba(26,255,122,0.3); flex-shrink: 0; }
+
+    /* ── Footer ── */
+    .ts-footer { text-align: center; font-size: 10px; color: rgba(26,255,122,0.25); line-height: 2; }
+
+    /* ── Animations ── */
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    @keyframes scan { 0%{top:0;opacity:1} 90%{opacity:1} 100%{top:100%;opacity:0} }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #0f1410; }
+    ::-webkit-scrollbar-thumb { background: rgba(26,255,122,0.25); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ HEADER ═══ -->
+  <div class="ts-header">
+    <div class="ts-logo-box">🛡</div>
+    <div>
+      <div class="ts-title">ThreatScan</div>
+      <div class="ts-subtitle">MESSAGE VULNERABILITY DETECTOR</div>
+    </div>
+    <div class="ts-status">
+      <div class="ts-dot"></div>
+      <span class="ts-status-label">ACTIVE</span>
+    </div>
+  </div>
+
+  <!-- ═══ MAIN ═══ -->
+  <div class="ts-main">
+
+    <!-- Input Panel -->
+    <div class="ts-panel ts-scanline-wrap mb-4">
+      <div class="ts-scanline" id="scanLine"></div>
+
+      <div class="ts-panel-header">
+        <span class="ts-label">// PASTE MESSAGE TO ANALYZE</span>
+        <div class="d-flex flex-wrap gap-1" id="exampleBtns"></div>
+      </div>
+
+      <textarea
+        class="ts-textarea"
+        id="messageInput"
+        placeholder="Paste a suspicious message, email, SMS, or WhatsApp text here..."
+      ></textarea>
+
+      <div class="ts-panel-footer">
+        <span class="ts-char-count" id="charCount">0 characters</span>
+        <button class="ts-btn" id="analyzeBtn" onclick="analyzeMessage()">ANALYZE THREAT</button>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div class="ts-error mb-4" id="errorBox"></div>
+
+    <!-- Result -->
+    <div class="ts-result ts-panel mb-4" id="resultBox"></div>
+
+    <!-- History -->
+    <div class="ts-panel ts-history mb-4" id="historyBox">
+      <div class="ts-panel-header">
+        <span class="ts-label">// SCAN HISTORY</span>
+      </div>
+      <div id="historyList"></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="ts-footer">
+      ThreatScan uses AI analysis — always exercise your own judgement.<br>
+      Never share passwords or banking credentials with anyone.
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // ══════════════════════════════════════
+    //  CONFIG — paste your Anthropic API key
+    // ══════════════════════════════════════
+    const API_KEY = "YOUR_ANTHROPIC_API_KEY_HERE";
+
+    // ══════════════════════════════════════
+    //  RISK COLOUR MAP
+    // ══════════════════════════════════════
+    const riskColors = {
+      SAFE:     { bg: "#0d2b1a", border: "#1aff7a", text: "#1aff7a", label: "SAFE" },
+      LOW:      { bg: "#1a2200", border: "#aaff00", text: "#aaff00", label: "LOW RISK" },
+      MEDIUM:   { bg: "#2b1a00", border: "#ffaa00", text: "#ffaa00", label: "MEDIUM RISK" },
+      HIGH:     { bg: "#2b0a0a", border: "#ff3333", text: "#ff3333", label: "HIGH RISK" },
+      CRITICAL: { bg: "#1a0000", border: "#ff0000", text: "#ff0000", label: "⚠ CRITICAL" },
+    };
+
+    const threatLabels = {
+      phishing:            "🎣 Phishing",
+      malware:             "🦠 Malware",
+      social_engineering:  "🎭 Social Engineering",
+      financial_fraud:     "💸 Financial Fraud",
+      impersonation:       "🎩 Impersonation",
+      urgency_tactic:      "⏰ Urgency Tactic",
+      suspicious_link:     "🔗 Suspicious Link",
+      safe:                "✅ Looks Safe",
+    };
+
+    const threatColors = {
+      phishing: "#ff3333", malware: "#ff6600",
+      social_engineering: "#ffaa00", financial_fraud: "#ff3399",
+      impersonation: "#aa33ff", urgency_tactic: "#ffdd00",
+      suspicious_link: "#ff6600", safe: "#1aff7a",
+    };
+
+    // ══════════════════════════════════════
+    //  EXAMPLE MESSAGES
+    // ══════════════════════════════════════
+    const EXAMPLES = [
+      {
+        label: "Bank Phishing",
+        text: "URGENT: Your Barclays account has been suspended. Click here to verify your details immediately: http://barclays-secure-verify.ru/login or your account will be permanently closed within 24 hours.",
+      },
+      {
+        label: "Prize Scam",
+        text: "Congratulations! You've been selected as a winner of £5,000 in our monthly draw. To claim your prize, send £50 processing fee via bank transfer to sort code 20-45-67, account 12345678. Reply YES to claim.",
+      },
+      {
+        label: "Legit Email",
+        text: "Hi, your Amazon order #204-1234567 has been shipped and will arrive by Thursday. You can track your package at amazon.co.uk/orders. No action needed.",
+      },
+      {
+        label: "WhatsApp Malware",
+        text: "Your WhatsApp has expired! Renew now for free by clicking: http://whatsapp-renew2024.xyz/free — Forward to 10 friends or your account gets deleted tonight.",
+      },
+    ];
+
+    // ══════════════════════════════════════
+    //  BUILD EXAMPLE BUTTONS
+    // ══════════════════════════════════════
+    const btnContainer = document.getElementById("exampleBtns");
+    EXAMPLES.forEach(ex => {
+      const btn = document.createElement("button");
+      btn.className = "ts-example-btn";
+      btn.textContent = ex.label;
+      btn.onclick = () => {
+        document.getElementById("messageInput").value = ex.text;
+        updateCharCount();
+      };
+      btnContainer.appendChild(btn);
+    });
+
+    // ══════════════════════════════════════
+    //  CHAR COUNT
+    // ══════════════════════════════════════
+    const messageInput = document.getElementById("messageInput");
+    messageInput.addEventListener("input", updateCharCount);
+    function updateCharCount() {
+      document.getElementById("charCount").textContent = messageInput.value.length + " characters";
+    }
+
+    // ══════════════════════════════════════
+    //  SCAN HISTORY
+    // ══════════════════════════════════════
+    let scanHistory = [];
+
+    function addToHistory(msg, risk) {
+      const time = new Date().toLocaleTimeString();
+      scanHistory.unshift({ message: msg.slice(0, 60) + (msg.length > 60 ? "…" : ""), risk, time });
+      if (scanHistory.length > 5) scanHistory.pop();
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const box = document.getElementById("historyBox");
+      const list = document.getElementById("historyList");
+      if (scanHistory.length === 0) { box.classList.remove("visible"); return; }
+      box.classList.add("visible");
+      list.innerHTML = scanHistory.map(h => {
+        const c = riskColors[h.risk] || riskColors.SAFE;
+        return `<div class="ts-history-row">
+          <span class="ts-history-risk" style="color:${c.text}">${c.label}</span>
+          <span class="ts-history-msg">${h.message}</span>
+          <span class="ts-history-time">${h.time}</span>
+        </div>`;
+      }).join("");
+    }
+
+    // ══════════════════════════════════════
+    //  ANALYZE
+    // ══════════════════════════════════════
+    async function analyzeMessage() {
+      const msg = messageInput.value.trim();
+      if (!msg) return;
+
+      // UI: loading state
+      const btn = document.getElementById("analyzeBtn");
+      btn.disabled = true;
+      btn.classList.add("scanning");
+      btn.textContent = "SCANNING...";
+      document.getElementById("scanLine").classList.add("active");
+      document.getElementById("errorBox").classList.remove("visible");
+      document.getElementById("resultBox").classList.remove("visible");
+      document.getElementById("resultBox").innerHTML = "";
+
+      try {
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": API_KEY,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 1000,
+            system: `You are a cybersecurity expert specializing in detecting scams, phishing, and social engineering attacks. Analyze the given message and respond ONLY with a JSON object. No markdown, no explanation, just JSON.
+
+Return this exact structure:
+{
+  "risk_level": "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+  "risk_score": 0-100,
+  "summary": "One sentence verdict",
+  "threats": ["phishing","malware","social_engineering","financial_fraud","impersonation","urgency_tactic","suspicious_link","safe"],
+  "red_flags": ["specific red flag 1", "specific red flag 2"],
+  "explanation": "2-3 sentence detailed explanation of why this is or isn't dangerous",
+  "advice": "What the person should do"
+}
+
+Only include relevant threat types in the threats array. If safe, just use ["safe"].`,
+            messages: [{ role: "user", content: `Analyze this message for scams/phishing:\n\n${msg}` }],
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.error) throw new Error(data.error.message || "API error");
+
+        const raw = data.content?.[0]?.text || "";
+        const clean = raw.replace(/```json|```/g, "").trim();
+        const result = JSON.parse(clean);
+
+        renderResult(result);
+        addToHistory(msg, result.risk_level);
+
+      } catch (err) {
+        const errBox = document.getElementById("errorBox");
+        errBox.textContent = "⚠ Analysis failed: " + (err.message || "Check your API key and internet connection.");
+        errBox.classList.add("visible");
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove("scanning");
+        btn.textContent = "ANALYZE THREAT";
+        document.getElementById("scanLine").classList.remove("active");
+      }
+    }
+
+    // ══════════════════════════════════════
+    //  RENDER RESULT
+    // ══════════════════════════════════════
+    function renderResult(r) {
+      const c = riskColors[r.risk_level] || riskColors.SAFE;
+      const box = document.getElementById("resultBox");
+
+      // Threat tags
+      const threatTags = (r.threats || []).map(t => {
+        const col = threatColors[t] || "#888";
+        const lbl = threatLabels[t] || t;
+        return `<span class="ts-threat-tag" style="color:${col};border-color:${col};background:${col}18">${lbl}</span>`;
+      }).join("");
+
+      // Red flags
+      const flags = (r.red_flags || []).map(f =>
+        `<div class="ts-flag"><span class="ts-flag-arrow" style="color:${c.text}">→</span><span>${f}</span></div>`
+      ).join("");
+
+      box.style.background = c.bg;
+      box.style.borderColor = c.border + "44";
+
+      box.innerHTML = `
+        <!-- Result Header -->
+        <div class="ts-result-header" style="background:${c.border}08;border-bottom:1px solid ${c.border}22">
+          <div class="text-center me-2">
+            <div class="ts-score-num" style="color:${c.text}">${r.risk_score}</div>
+            <div class="ts-score-label" style="color:${c.text}">RISK SCORE</div>
+          </div>
+          <div class="flex-grow-1">
+            <div class="ts-risk-name" style="color:${c.text}">${c.label}</div>
+            <div class="ts-summary">${r.summary}</div>
+          </div>
+          <div class="ts-badge-pill" style="color:${c.text};border-color:${c.border}">${r.risk_level}</div>
+        </div>
+
+        <!-- Threats -->
+        <div class="ts-section">
+          <div class="ts-label mb-2">// DETECTED THREATS</div>
+          <div>${threatTags}</div>
+        </div>
+
+        <!-- Red Flags -->
+        ${flags ? `<div class="ts-section">
+          <div class="ts-label mb-2">// RED FLAGS</div>
+          ${flags}
+        </div>` : ""}
+
+        <!-- Explanation -->
+        <div class="ts-section">
+          <div class="ts-label mb-2">// ANALYSIS</div>
+          <div class="ts-explanation">${r.explanation}</div>
+        </div>
+
+        <!-- Advice -->
+        <div class="ts-section" style="background:${c.border}0a">
+          <div class="ts-label mb-2">// RECOMMENDED ACTION</div>
+          <div class="ts-advice" style="color:${c.text}">
+            ${r.risk_level === "SAFE" ? "✓" : "⚠"} ${r.advice}
+          </div>
+        </div>
+      `;
+
+      box.classList.add("visible");
+    }
+  </script>
+</body>
+</html>
